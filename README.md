@@ -25,11 +25,10 @@ This repository contains the implementation of **SHARC** (Reference point driven
 Convert a 3D mesh (e.g., `.off`, `.obj`, `.ply`) into the SHARC representation.
 
 ```bash
-python mesh_to_sharc.py \ 
-    --input_mesh data/demo/dragon.off \ 
-    --output_dir data/demo/output/ \
-    --lfit 64 \ 
-    --lrecon 64 \ 
+python mesh_to_sharc.py \
+    --input_mesh assets/demo/dragon.off \
+    --output_dir assets/demo/output/ \
+    --lfit 64 \
     --max_reference_points 1000
 ```
 
@@ -39,6 +38,8 @@ To reconstruct the mesh from the saved coefficients:
 
 ```bash
 python sharc_to_mesh.py \
-    --input_model data/demo/output/dragon/coeffs/ \
-    --output_mesh reconstructed.ply
+    --model_path assets/demo/output/dragon/coeffs/sh_coeffs.npz \
+    --output_dir assets/demo/output/dragon/reconstruction \
+    --mesh
+
 ```
