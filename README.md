@@ -2,7 +2,7 @@
 
 This repository contains the implementation of **SHARC** (Reference point driven Spherical Harmonic Representation for Complex Shapes), a method for efficient 3D shape representation and reconstruction using Spherical Harmonics (SH) centered at optimally selected internal reference points.
 
-![Method](./assets/sharc_method.png)
+![Method](./assets/SHARC_method.png)
 
 ## Installation
 
