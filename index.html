@@ -1,0 +1,2750 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SHARC — Reference Point Driven Spherical Harmonic Representation for Complex Shapes</title>
+  <meta name="description"
+    content="SHARC: A compact, genus-agnostic shape representation that encodes distance fields via optimally placed interior reference points and Spherical Harmonics. ICPR 2026.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap"
+    rel="stylesheet">
+  <!-- KaTeX for LaTeX notation -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <!-- Chart.js for Interactive Plots -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #0a0c10;
+      --surface: #0f1218;
+      --surface2: #161b24;
+      --border: rgba(255, 255, 255, 0.07);
+      --accent: #5b9cf6;
+      --accent2: #a78bfa;
+      --accent3: #34d399;
+      --text: #e8eaf0;
+      --muted: #6b7280;
+      --highlight: #1e293b;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      font-size: 13px;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 300;
+      font-size: 1rem;
+      line-height: 1.7;
+      overflow-x: hidden;
+    }
+
+    /* ── GRID OVERLAY ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(91, 156, 246, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(91, 156, 246, 0.03) 1px, transparent 1px);
+      background-size: 80px 80px;
+    }
+
+    /* ── AMBIENT GLOW (Spherical Harmonic Lobes) ── */
+    .glow-bg {
+      position: fixed;
+      inset: -20%;
+      z-index: 0;
+      pointer-events: none;
+      background: conic-gradient(from 0deg at 50% 50%,
+          rgba(0, 132, 255, 0.75) 0deg,
+          rgba(10, 12, 16, 0) 45deg,
+          rgba(255, 20, 100, 0.65) 90deg,
+          rgba(10, 12, 16, 0) 135deg,
+          rgba(0, 132, 255, 0.75) 180deg,
+          rgba(10, 12, 16, 0) 225deg,
+          rgba(255, 20, 100, 0.65) 270deg,
+          rgba(10, 12, 16, 0) 315deg,
+          rgba(0, 132, 255, 0.75) 360deg);
+      filter: blur(25px);
+      -webkit-mask-image: radial-gradient(ellipse at 50% 50%, transparent 5%, black 35%, transparent 75%);
+      mask-image: radial-gradient(ellipse at 50% 50%, transparent 5%, black 35%, transparent 75%);
+      opacity: 0.75;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 3rem;
+      background: rgba(10, 12, 16, 0.8);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-logo {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1.0rem;
+      color: var(--accent);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+    }
+
+    .nav-links a {
+      font-size: 0.95rem;
+      color: #fff;
+      text-decoration: none;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: var(--text);
+    }
+
+    /* ── HERO ── */
+    .hero {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 6rem 2rem 4rem;
+      text-align: center;
+    }
+
+    .conference-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.92rem;
+      color: #fff;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.06);
+      padding: 0.45rem 1.1rem;
+      border-radius: 100px;
+      margin-bottom: 2.5rem;
+      animation: fadeUp 0.6s ease both;
+    }
+
+    .conference-badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #fff;
+      animation: pulse 2s ease infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 0.5;
+        transform: scale(0.8);
+      }
+    }
+
+    h1 {
+      font-family: 'DM Sans', sans-serif;
+      font-size: clamp(1.8rem, 4vw, 3.2rem);
+      font-weight: 400;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      max-width: 1100px;
+      animation: fadeUp 0.7s 0.1s ease both;
+    }
+
+    h1 em {
+      font-style: italic;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .title-separator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      margin-top: 2rem;
+      width: 100%;
+      max-width: 400px;
+      animation: fadeUp 0.7s 0.15s ease both;
+    }
+    .title-separator::before,
+    .title-separator::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--muted);
+    }
+    .title-separator-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+
+    .subtitle {
+      margin-top: 1.5rem;
+      font-size: 1.45rem;
+      color: #9ca3af;
+      max-width: 750px;
+      animation: fadeUp 0.7s 0.2s ease both;
+    }
+
+    .authors {
+      margin-top: 2.5rem;
+      font-size: 1.6rem;
+      color: var(--text);
+      animation: fadeUp 0.7s 0.3s ease both;
+    }
+
+    .authors a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .authors a:hover {
+      text-decoration: underline;
+    }
+
+    .affil {
+      font-size: 1.45rem;
+      color: #fff;
+      margin-top: 0.3rem;
+    }
+
+    .affil a {
+      color: var(--accent3);
+      text-decoration: none;
+      border-bottom: none;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .affil a:hover {
+      color: #fff;
+      border-bottom: none;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: center;
+      margin-top: 2.5rem;
+      animation: fadeUp 0.7s 0.4s ease both;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.95rem 1.8rem;
+      border-radius: 8px;
+      font-size: 1.15rem;
+      font-family: 'DM Sans', sans-serif;
+      letter-spacing: 0.05em;
+      text-decoration: none;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #000;
+      font-weight: 500;
+    }
+
+    .btn-primary:hover {
+      background: #7ab3ff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px rgba(91, 156, 246, 0.35);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border-color: rgba(255, 255, 255, 0.35);
+    }
+
+    .btn-secondary:hover {
+      border-color: rgba(255, 255, 255, 0.6);
+      background: var(--surface);
+      transform: translateY(-1px);
+    }
+
+    .btn svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    /* ── TEASER ── */
+    .teaser {
+      position: relative;
+      z-index: 1;
+      max-width: 960px;
+      margin: 0 auto 4rem;
+      padding: 0 2rem;
+      animation: fadeUp 0.8s 0.5s ease both;
+    }
+
+    .teaser-box {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      background: var(--surface);
+      position: relative;
+    }
+
+    .teaser-box::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(91, 156, 246, 0.03) 0%, rgba(167, 139, 250, 0.03) 100%);
+      pointer-events: none;
+    }
+
+    .pipeline-visual {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0;
+    }
+
+    .pipeline-step {
+      padding: 1.8rem 1rem;
+      text-align: center;
+      border-right: 1px solid var(--border);
+      position: relative;
+      transition: background 0.2s;
+    }
+
+    .pipeline-step:last-child {
+      border-right: none;
+    }
+
+    .pipeline-step:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .step-number {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1.0rem;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      margin-bottom: 0.8rem;
+    }
+
+    .step-icon {
+      width: 44px;
+      height: 44px;
+      margin: 0 auto 0.8rem;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+    }
+
+    .step-label {
+      font-size: 1.15rem;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 0.3rem;
+    }
+
+    .step-desc {
+      font-size: 1.05rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .arrow-connector {
+      position: absolute;
+      right: -1px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 0;
+      height: 0;
+      border-top: 6px solid transparent;
+      border-bottom: 6px solid transparent;
+      border-left: 7px solid var(--accent);
+      opacity: 0.4;
+      z-index: 1;
+    }
+
+    /* ── SECTION ── */
+    section {
+      position: relative;
+      z-index: 1;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 3rem 2rem;
+    }
+
+    .section-label {
+      font-family: 'DM Sans', sans-serif;
+      font-size: clamp(1.5rem, 2.4vw, 2.15rem);
+      font-weight: 500;
+      color: var(--accent);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+    }
+
+    h2 {
+      font-family: 'DM Sans', sans-serif;
+      font-size: clamp(1.2rem, 2vw, 1.7rem);
+      font-weight: 400;
+      line-height: 1.2;
+      margin-bottom: 1.5rem;
+    }
+
+    p {
+      color: rgba(232, 234, 240, 0.8);
+      margin-bottom: 1rem;
+      font-size: 1.35rem;
+    }
+
+    /* ── ABSTRACT ── */
+    .abstract-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .abstract-card::before {
+      content: '"';
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12rem;
+      color: rgba(91, 156, 246, 0.08);
+      position: absolute;
+      top: -1.5rem;
+      left: 1.5rem;
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    /* ── CONTRIBUTIONS ── */
+    .contrib-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .contrib-item {
+      background: var(--surface);
+      padding: 2rem 1.8rem;
+      transition: background 0.2s;
+    }
+
+    .contrib-item:hover {
+      background: var(--surface2);
+    }
+
+    .contrib-icon {
+      font-size: 1.8rem;
+      margin-bottom: 1rem;
+    }
+
+    .contrib-title {
+      font-size: 1.8rem;
+      font-weight: bold;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+
+    .contrib-desc {
+      font-size: 1.35rem;
+      color: var(--muted);
+      line-height: 1.5;
+      margin: 0;
+    }
+
+    /* ── METRICS TABLE ── */
+    .metrics-wrapper {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 1.15rem;
+      color: #fff;
+    }
+
+    thead tr {
+      border-bottom: 2px solid var(--border);
+    }
+
+    th {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1.25rem;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      text-transform: uppercase;
+      padding: 0.4rem 0.6rem;
+      text-align: center;
+      font-weight: 400;
+    }
+
+    th:first-child {
+      text-align: left;
+    }
+
+    .keep-case {
+      text-transform: none !important;
+      letter-spacing: 0.02em;
+    }
+
+    #results th {
+      color: #fff;
+    }
+
+    td {
+      padding: 0.4rem 0.6rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      color: rgba(232, 234, 240, 0.75);
+    }
+
+    td:first-child {
+      text-align: left;
+      color: var(--text);
+      font-weight: 400;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .bold-td {
+      color: var(--accent3) !important;
+      font-weight: 500;
+    }
+
+    .ours-row td {
+      background: rgba(91, 156, 246, 0.04);
+    }
+
+    .ours-row td:first-child {
+      color: var(--accent) !important;
+    }
+
+    .table-caption {
+      font-size: 1.35rem;
+      color: var(--muted);
+      text-align: center;
+      margin-top: 1rem;
+      font-style: italic;
+    }
+
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      padding: 0.5rem;
+    }
+
+    .shapenet-metrics-wrapper {
+      overflow-x: hidden;
+    }
+
+    .shapenet-results-table {
+      table-layout: fixed;
+      width: 100%;
+      font-size: 1.15rem;
+    }
+
+    .shapenet-results-table th,
+    .shapenet-results-table td {
+      padding: 0.24rem 0.16rem;
+      letter-spacing: 0.01em;
+      text-transform: none;
+      white-space: nowrap;
+    }
+
+    .shapenet-results-table th:first-child,
+    .shapenet-results-table td:first-child {
+      width: 8%;
+    }
+
+    /* ── RESULTS GALLERY ── */
+    .results-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1.1rem;
+      letter-spacing: 0.08em;
+      padding: 0.5rem 1.2rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active,
+    .tab-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(91, 156, 246, 0.08);
+    }
+
+    .result-display {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+    }
+
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .comparison-col {
+      text-align: center;
+    }
+
+    .col-label {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1.25rem;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.6rem;
+    }
+
+    .col-label.ours {
+      color: var(--accent);
+    }
+
+    .shape-block {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .shape-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .shape-card:hover {
+      border-color: rgba(91, 156, 246, 0.3);
+    }
+
+    .ours-col .shape-card {
+      border-color: rgba(91, 156, 246, 0.2);
+      background: rgba(91, 156, 246, 0.05);
+    }
+
+    .shape-card .metric-overlay {
+      position: absolute;
+      bottom: 4px;
+      right: 6px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.85rem;
+      color: var(--accent3);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .shape-card:hover .metric-overlay {
+      opacity: 1;
+    }
+
+    /* SH sphere visualization */
+    .sh-sphere {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .sphere-base {
+      width: 60%;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      position: relative;
+    }
+
+    /* ── ABLATION ── */
+    .ablation-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    .ablation-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      transition: border-color 0.2s;
+    }
+
+    .ablation-card:hover {
+      border-color: rgba(91, 156, 246, 0.25);
+    }
+
+    .ablation-title {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1.5rem;
+      color: var(--accent);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 1.2rem;
+    }
+
+    .param-row {
+      display: grid;
+      grid-template-columns: 110px 1fr 90px;
+      align-items: center;
+      gap: 0.8rem;
+      margin-bottom: 0.6rem;
+    }
+
+    .param-label {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1.1rem;
+      color: var(--muted);
+    }
+
+    .param-bar-track {
+      height: 6px;
+      background: var(--surface2);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .param-bar {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 1s ease;
+    }
+
+    .param-value {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1.1rem;
+      color: var(--text);
+      text-align: right;
+    }
+
+    /* ── EFFICIENCY ── */
+    .efficiency-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+
+    .stat-box {
+      background: var(--surface);
+      padding: 2rem;
+      text-align: center;
+      transition: background 0.2s;
+    }
+
+    .stat-box:hover {
+      background: var(--surface2);
+    }
+
+    .stat-value {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 2rem;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1;
+      margin-bottom: 0.4rem;
+    }
+
+    .stat-label {
+      font-size: 1.35rem;
+      color: #fff;
+    }
+
+    /* ── BIBTEX ── */
+    .bibtex-block {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .bibtex-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.8rem 1.2rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+
+    .bibtex-dots {
+      display: flex;
+      gap: 5px;
+    }
+
+    .bibtex-dots span {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .copy-btn {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1.0rem;
+      color: var(--muted);
+      background: none;
+      border: none;
+      cursor: pointer;
+      letter-spacing: 0.08em;
+      transition: color 0.2s;
+    }
+
+    .copy-btn:hover {
+      color: var(--accent);
+    }
+
+    pre {
+      padding: 1.5rem;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1.1rem;
+      color: rgba(232, 234, 240, 0.7);
+      line-height: 1.6;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    pre .key {
+      color: var(--accent);
+    }
+
+    pre .val {
+      color: var(--accent3);
+    }
+
+    pre .brace {
+      color: var(--accent2);
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 3rem 2rem;
+      border-top: 1px solid var(--border);
+      font-size: 1.1rem;
+      color: var(--muted);
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    /* ── DIVIDER ── */
+    .section-divider {
+      max-width: 960px;
+      margin: 0 auto;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── ANIMATIONS ── */
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: none;
+    }
+
+    /* ── CHART-LIKE BARS ── */
+    .chart-container {
+      margin-top: 1rem;
+    }
+
+    .chart-row {
+      display: grid;
+      grid-template-columns: 100px 1fr 60px;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 0.7rem;
+    }
+
+    .chart-name {
+      font-size: 1.1rem;
+      color: var(--muted);
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .chart-bar-wrap {
+      height: 8px;
+      background: var(--surface2);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .chart-bar {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+      width: 0;
+    }
+
+    .chart-num {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1.05rem;
+      text-align: right;
+    }
+
+    /* ── TAG CHIPS ── */
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 2rem;
+    }
+
+    .tag {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1.15rem;
+      letter-spacing: 0.08em;
+      padding: 0.35rem 0.9rem;
+      border-radius: 100px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #fff;
+    }
+
+    /* ── SPLASH FIGURE ── */
+    .splash-figure {
+      position: relative;
+      z-index: 1;
+      max-width: 1100px;
+      margin: 0 auto 3rem;
+      padding: 0 2rem;
+    }
+
+    .splash-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .splash-box img {
+      width: 100%;
+      display: block;
+    }
+
+    .splash-caption {
+      padding: 1rem 1.5rem;
+      font-size: 1.35rem;
+      color: var(--muted);
+      text-align: center;
+      font-style: normal;
+      border-top: 1px solid var(--border);
+      background: var(--surface2);
+    }
+
+    /* ── QUALITATIVE GALLERY ── */
+    .gallery-section {
+      margin-top: 3rem;
+    }
+
+    .gallery-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .gallery-tab {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1.1rem;
+      letter-spacing: 0.08em;
+      padding: 0.5rem 1.2rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .gallery-tab.active,
+    .gallery-tab:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(91, 156, 246, 0.08);
+    }
+
+    .gallery-panel {
+      display: none;
+    }
+
+    .gallery-panel.active {
+      display: block;
+    }
+
+    .gallery-row {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+      transition: border-color 0.2s;
+    }
+
+    .gallery-row:hover {
+      border-color: rgba(91, 156, 246, 0.25);
+    }
+
+    .gallery-row-label {
+      padding: 0.8rem 1.5rem;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1.1rem;
+      color: var(--accent);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+
+    .gallery-images {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0;
+    }
+
+    .gallery-img-col {
+      position: relative;
+      border-right: 1px solid var(--border);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .gallery-img-col:last-child {
+      border-right: none;
+    }
+
+    .gallery-img-col img {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: contain;
+      display: block;
+      background: var(--surface2);
+      transition: transform 0.3s ease;
+    }
+
+    .gallery-img-col:hover img {
+      cursor: crosshair;
+    }
+
+    .gallery-img-label {
+      padding: 0.4rem;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.95rem;
+      text-align: center;
+      color: var(--text);
+      background: var(--surface2);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border-top: 1px solid var(--border);
+    }
+
+    #panel-thingi .gallery-img-col img {
+      transform: scale(1.7);
+      clip-path: inset(20.58%);
+      margin: 0;
+    }
+
+    #panel-thingi .gallery-img-col:hover img {
+      cursor: crosshair;
+    }
+
+    .gallery-img-label.ours-label {
+      color: #fff;
+      background: rgba(91, 156, 246, 0.85);
+      font-weight: 500;
+    }
+
+    /* ── KATEX OVERRIDES ── */
+    .katex {
+      font-size: 1.1em !important;
+      text-transform: none !important;
+    }
+
+    th .katex,
+    td .katex {
+      font-size: 1.0em !important;
+    }
+
+    .stat-label .katex {
+      font-size: 0.95em !important;
+    }
+
+    .ablation-title .katex {
+      font-size: 1.05em !important;
+    }
+
+    .param-label .katex {
+      font-size: 0.95em !important;
+    }
+
+    .param-value .katex {
+      font-size: 0.95em !important;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      nav {
+        padding: 1rem 1.5rem;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      .pipeline-visual {
+        grid-template-columns: 1fr;
+      }
+
+      .arrow-connector {
+        right: 50%;
+        top: auto;
+        bottom: -10px;
+        transform: translateX(50%) rotate(90deg);
+      }
+
+      .pipeline-step {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .pipeline-step:last-child {
+        border-bottom: none;
+      }
+
+      .contrib-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .comparison-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .efficiency-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .ablation-grid {
+        grid-template-columns: 1fr;
+      }
+
+      /* Gallery scrolling */
+      .gallery-images {
+        display: flex;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        scrollbar-width: none;
+        /* Firefox */
+      }
+
+      .gallery-images::-webkit-scrollbar {
+        display: none;
+        /* Safari and Chrome */
+      }
+
+      .gallery-img-col {
+        flex: 0 0 75%;
+        scroll-snap-align: center;
+        border-right: 1px solid var(--border);
+      }
+
+      .gallery-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 0.5rem;
+        scrollbar-width: none;
+      }
+
+      .gallery-tabs::-webkit-scrollbar {
+        display: none;
+      }
+
+      .gallery-tab {
+        white-space: nowrap;
+      }
+
+      h1 {
+        font-size: 2.4rem;
+        padding-top: 1rem;
+      }
+
+      .hero {
+        min-height: auto;
+        padding: 6rem 1rem 3rem;
+      }
+
+      /* Adjust charts for smaller screens */
+      .chart-container {
+        height: 300px !important;
+      }
+
+      .ablation-grid>div>div>div>canvas {
+        height: 200px !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="glow-bg"></div>
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-logo">SHARC</div>
+    <div class="nav-links">
+      <a href="#abstract">Abstract</a>
+      <a href="#method">Method</a>
+      <a href="#results">Results</a>
+      <a href="#gallery">Gallery</a>
+      <a href="#ablation">Ablation</a>
+      <a href="#bibtex">BibTeX</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="conference-badge">ICPR 2026 · Accepted</div>
+
+    <h1>SHARC : Reference Point Driven Spherical Harmonic Representation for Complex Shapes    </h1>
+    
+    <div class="title-separator">
+      <div class="title-separator-dot"></div>
+    </div>
+
+    <p class="subtitle">
+      A compact, fast, and genus-agnostic shape representation that encodes distance fields via optimally placed
+      interior reference points and Spherical Harmonics.
+    </p>
+
+    <div class="authors">
+      <div>
+        Panagiotis Sapoutzoglou &nbsp;·&nbsp;
+        George Terzakis &nbsp;·&nbsp;
+        Maria Pateraki
+      </div>
+      <div class="affil"><a href="https://www.ntua.gr/en/" target="_blank" rel="noopener">National Technical University of Athens, Athens, Greece</a></div>
+    </div>
+
+    <div class="hero-actions">
+      <a href="https://github.com/POSE-Lab/SHARC" class="btn btn-primary" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+        </svg>
+        Code
+      </a>
+      <a href="https://arxiv.org/abs/2604.01894" class="btn btn-secondary" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+        </svg>
+        arXiv
+      </a>
+
+    </div>
+
+    <div class="tags">
+      <span class="tag">Shape Representation</span>
+      <span class="tag">Spherical Harmonics</span>
+      <span class="tag">3D Reconstruction</span>
+    </div>
+  </div>
+
+
+  <!-- ABSTRACT -->
+  <div class="section-divider"></div>
+  <section id="abstract">
+    <div class="section-label">Abstract</div>
+    <div class="abstract-card reveal">
+      <p>
+        We propose <strong>SHARC</strong>, a novel framework that synthesizes arbitrary, genus-agnostic shapes by means
+        of a collection of Spherical Harmonic (SH) representations of distance fields. These distance fields are
+        anchored at optimally placed reference points in the interior volume of the surface in a way that maximizes
+        learning of the finer details of the surface.
+      </p>
+      <p>
+        To achieve this, we employ a cost function that jointly maximizes sparsity and centrality in terms of
+        positioning, as well as visibility of the surface from their location. For each selected reference point, we
+        sample the visible distance field to the surface geometry via ray-casting and compute the SH coefficients using
+        the Fast Spherical Harmonic Transform (FSHT).
+      </p>
+      <p style="margin:0;">
+        To enhance geometric fidelity, we apply a configurable low-pass filter to the coefficients and refine the output
+        using a local consistency constraint based on proximity. Evaluation of SHARC against state-of-the-art methods
+        demonstrates that the proposed method outperforms existing approaches in both <strong>reconstruction
+          accuracy</strong> and <strong>time efficiency</strong> without sacrificing model parsimony.
+      </p>
+    </div>
+  </section>
+
+
+  <!-- PIPELINE SPLASH FIGURE -->
+  <div class="splash-figure reveal">
+    <div class="splash-box">
+      <img src="assets/SHARC_pipeline_dark.png"
+        alt="SHARC pipeline: From input mesh through candidate generation, visibility-aware anchor selection, SH distance field encoding, to reconstruction"
+        loading="lazy">
+      <div class="splash-caption"><b style="color:#fff; font-style:normal;">Figure 1. SHARC Pipeline Overview</b> — From a dense pool of
+        interior candidates, we select a sparse set of reference points that maximize surface visibility. For each
+        point, the local radial distance field is encoded into Spherical Harmonic (SH) coefficients. To reconstruct the
+        shape, we decode these fields and recover the surface points, using a local consistency constraint to filter
+        noisy reconstructed points.</div>
+    </div>
+  </div>
+
+  <!-- METHOD -->
+  <div class="section-divider"></div>
+  <section id="method">
+    <div class="section-label">Method</div>
+    <h2>What Makes SHARC Different</h2>
+
+    <div class="contrib-grid reveal">
+      <div class="contrib-item">
+        <div class="contrib-icon">⚡</div>
+        <div class="contrib-title">Execution Speed</div>
+        <p class="contrib-desc">Both encoding and decoding stages are significantly faster than state-of-the-art. For
+          instance, the Thai Statue (10M-face mesh) is encoded in just 8 seconds.</p>
+      </div>
+      <div class="contrib-item">
+        <div class="contrib-icon">⚖️</div>
+        <div class="contrib-title">Accuracy vs. Compactness</div>
+        <p class="contrib-desc">Strikes a balance between representation complexity (number of reference points + SH
+          coefficients) and reconstruction quality, outperforming all baselines.</p>
+      </div>
+      <div class="contrib-item">
+        <div class="contrib-icon">🔍</div>
+        <div class="contrib-title">Proximity-Based Reconstruction</div>
+        <p class="contrib-desc">Omnidirectional distance fields per reference point, filtered by proximity. Nearest
+          reference point wins — sharper, more accurate surfaces.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <div class="section-divider"></div>
+  <section id="results">
+    <div class="section-label">Results</div>
+    <h2>Quantitative Comparison</h2>
+    <p>Evaluated across PSB, Stanford, Thingi10k, and ShapeNet datasets. All metrics expressed as % of object diameter.
+      \(d_{\mathrm{CD}}\) is the Chamfer Distance, while \(\overrightarrow{\epsilon}, \overleftarrow{\epsilon},
+      \overleftrightarrow{\epsilon}\) represent the forward, backward, and symmetric Hausdorff distances, respectively.
+    </p>
+
+    <!-- EFFICIENCY STATS -->
+    <div class="efficiency-grid reveal" style="margin: 2rem 0;">
+      <div class="stat-box">
+        <div class="stat-value">121×</div>
+        <div class="stat-label">Compression vs. Raw MA<br><span style="font-size:1.15rem; color: #a1a1aa;">Thai Statue
+            (181MB → 1.49MB)</span></div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value">~46</div>
+        <div class="stat-label">Mean Primitives on PSB<br><span style="font-size:1.15rem; color: #a1a1aa;">vs 200–400 for
+            MASH</span></div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value">&lt;20s</div>
+        <div class="stat-label">Encoding at \(|\mathcal{C}|=200\)<br><span style="font-size:1.15rem; color: #a1a1aa;">Nearly constant runtime</span></div>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="table-wrap reveal">
+      <div class="metrics-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th colspan="5" style="border-right:1px solid var(--border); color:#fff; font-weight:bold;">PSB</th>
+              <th colspan="5" style="border-right:1px solid var(--border); color:#fff; font-weight:bold;"><span class="keep-case">Stanford</span></th>
+              <th colspan="5" style="color:#fff; font-weight:bold;"><span class="keep-case">Thingi10k</span></th>
+            </tr>
+            <tr>
+              <th></th>
+              <th>\(|\mathcal{C}|\)</th>
+              <th>\(d_{\mathrm{CD}}\)</th>
+              <th>\(\overrightarrow{\epsilon}\)</th>
+              <th>\(\overleftarrow{\epsilon}\)</th>
+              <th style="border-right:1px solid var(--border);">\(\overleftrightarrow{\epsilon}\)</th>
+              <th>\(|\mathcal{C}|\)</th>
+              <th>\(d_{\mathrm{CD}}\)</th>
+              <th>\(\overrightarrow{\epsilon}\)</th>
+              <th>\(\overleftarrow{\epsilon}\)</th>
+              <th style="border-right:1px solid var(--border);">\(\overleftrightarrow{\epsilon}\)</th>
+              <th>\(|\mathcal{C}|\)</th>
+              <th>\(d_{\mathrm{CD}}\)</th>
+              <th>\(\overrightarrow{\epsilon}\)</th>
+              <th>\(\overleftarrow{\epsilon}\)</th>
+              <th>\(\overleftrightarrow{\epsilon}\)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Raw MA</td>
+              <td>30k</td>
+              <td>0.56</td>
+              <td>2.43</td>
+              <td>2.25</td>
+              <td style="border-right:1px solid var(--border);">2.46</td>
+              <td>83.7k</td>
+              <td>0.61</td>
+              <td>3.26</td>
+              <td>2.26</td>
+              <td style="border-right:1px solid var(--border);">3.27</td>
+              <td>53.3k</td>
+              <td>2.23</td>
+              <td>7.34</td>
+              <td>6.84</td>
+              <td>7.42</td>
+            </tr>
+            <tr>
+              <td>CoverageAxis++</td>
+              <td>310</td>
+              <td>0.62</td>
+              <td>2.86</td>
+              <td>2.20</td>
+              <td style="border-right:1px solid var(--border);">2.87</td>
+              <td>510</td>
+              <td>0.74</td>
+              <td>3.30</td>
+              <td>2.46</td>
+              <td style="border-right:1px solid var(--border);">3.37</td>
+              <td>654</td>
+              <td>1.59</td>
+              <td>5.53</td>
+              <td>5.26</td>
+              <td>5.83</td>
+            </tr>
+            <tr>
+              <td>MASH</td>
+              <td>200</td>
+              <td>0.31</td>
+              <td>1.02</td>
+              <td>1.53</td>
+              <td style="border-right:1px solid var(--border);">1.64</td>
+              <td>400</td>
+              <td>0.38</td>
+              <td>1.39</td>
+              <td>1.33</td>
+              <td style="border-right:1px solid var(--border);">1.49</td>
+              <td>400</td>
+              <td>0.52</td>
+              <td>1.77</td>
+              <td>2.74</td>
+              <td>2.99</td>
+            </tr>
+            <tr class="ours-row">
+              <td><strong>SHARC (Ours)</strong></td>
+              <td class="bold-td">46</td>
+              <td class="bold-td">0.28</td>
+              <td class="bold-td">0.73</td>
+              <td class="bold-td">0.62</td>
+              <td style="border-right:1px solid var(--border);" class="bold-td">0.74</td>
+              <td class="bold-td">77</td>
+              <td class="bold-td">0.33</td>
+              <td class="bold-td">1.07</td>
+              <td class="bold-td">0.89</td>
+              <td style="border-right:1px solid var(--border);" class="bold-td">1.08</td>
+              <td class="bold-td">118</td>
+              <td class="bold-td">0.39</td>
+              <td>1.72</td>
+              <td class="bold-td">1.28</td>
+              <td class="bold-td">1.78</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="table-caption">Best results highlighted. Metrics as % of diameter. SHARC achieves best
+        \(d_{\mathrm{CD}}\) across all datasets with fewest primitives.</p>
+    </div>
+
+    <!-- SHAPENET CATEGORY TABLE -->
+    <div class="table-wrap reveal" style="margin-top: 1.5rem;">
+      <div class="metrics-wrapper shapenet-metrics-wrapper">
+        <table class="shapenet-results-table">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th colspan="5" style="border-right:1px solid var(--border); color:#fff; font-weight:bold;">Ours</th>
+              <th colspan="5" style="border-right:1px solid var(--border); color:#fff; font-weight:bold;">Mash</th>
+              <th colspan="5" style="border-right:1px solid var(--border); color:#fff; font-weight:bold;">Coverageaxis++</th>
+              <th colspan="5" style="color:#fff; font-weight:bold;">Raw Ma</th>
+            </tr>
+            <tr>
+              <th></th>
+              <th>\(|\mathcal{C}|\)</th>
+              <th>\(d_{\mathrm{CD}}\)</th>
+              <th>\(\overrightarrow{\epsilon}\)</th>
+              <th>\(\overleftarrow{\epsilon}\)</th>
+              <th style="border-right:1px solid var(--border);">\(\overleftrightarrow{\epsilon}\)</th>
+              <th>\(|\mathcal{C}|\)</th>
+              <th>\(d_{\mathrm{CD}}\)</th>
+              <th>\(\overrightarrow{\epsilon}\)</th>
+              <th>\(\overleftarrow{\epsilon}\)</th>
+              <th style="border-right:1px solid var(--border);">\(\overleftrightarrow{\epsilon}\)</th>
+              <th>\(|\mathcal{C}|\)</th>
+              <th>\(d_{\mathrm{CD}}\)</th>
+              <th>\(\overrightarrow{\epsilon}\)</th>
+              <th>\(\overleftarrow{\epsilon}\)</th>
+              <th style="border-right:1px solid var(--border);">\(\overleftrightarrow{\epsilon}\)</th>
+              <th>\(|\mathcal{C}|\)</th>
+              <th>\(d_{\mathrm{CD}}\)</th>
+              <th>\(\overrightarrow{\epsilon}\)</th>
+              <th>\(\overleftarrow{\epsilon}\)</th>
+              <th>\(\overleftrightarrow{\epsilon}\)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Airplane</strong></td>
+              <td class="bold-td">46</td>
+              <td class="bold-td">0.23</td>
+              <td>0.92</td>
+              <td class="bold-td">0.53</td>
+              <td style="border-right:1px solid var(--border);">0.97</td>
+              <td>200</td>
+              <td>0.27</td>
+              <td>1.21</td>
+              <td>1.47</td>
+              <td style="border-right:1px solid var(--border);">1.63</td>
+              <td>199</td>
+              <td>0.49</td>
+              <td>2.79</td>
+              <td>1.55</td>
+              <td style="border-right:1px solid var(--border);">2.80</td>
+              <td>82k</td>
+              <td>0.30</td>
+              <td class="bold-td">0.90</td>
+              <td>0.58</td>
+              <td class="bold-td">0.91</td>
+            </tr>
+            <tr>
+              <td><strong>Chair</strong></td>
+              <td class="bold-td">99</td>
+              <td class="bold-td">0.35</td>
+              <td class="bold-td">0.83</td>
+              <td class="bold-td">0.89</td>
+              <td style="border-right:1px solid var(--border);" class="bold-td">1.02</td>
+              <td>200</td>
+              <td>0.46</td>
+              <td>1.47</td>
+              <td>2.67</td>
+              <td style="border-right:1px solid var(--border);">2.72</td>
+              <td>200</td>
+              <td>0.72</td>
+              <td>3.49</td>
+              <td>2.34</td>
+              <td style="border-right:1px solid var(--border);">3.52</td>
+              <td>83k</td>
+              <td>0.44</td>
+              <td>1.11</td>
+              <td>0.98</td>
+              <td>1.15</td>
+            </tr>
+            <tr>
+              <td><strong>Lamp</strong></td>
+              <td class="bold-td">59</td>
+              <td class="bold-td">0.28</td>
+              <td>2.37</td>
+              <td>0.75</td>
+              <td style="border-right:1px solid var(--border);">2.60</td>
+              <td>200</td>
+              <td>0.34</td>
+              <td class="bold-td">1.51</td>
+              <td>2.14</td>
+              <td style="border-right:1px solid var(--border);">2.33</td>
+              <td>167</td>
+              <td>0.54</td>
+              <td>3.79</td>
+              <td>1.63</td>
+              <td style="border-right:1px solid var(--border);">3.87</td>
+              <td>71k</td>
+              <td>0.32</td>
+              <td>2.20</td>
+              <td class="bold-td">0.65</td>
+              <td class="bold-td">2.22</td>
+            </tr>
+            <tr>
+              <td><strong>Sofa</strong></td>
+              <td class="bold-td">116</td>
+              <td class="bold-td">0.36</td>
+              <td class="bold-td">0.86</td>
+              <td>1.06</td>
+              <td style="border-right:1px solid var(--border);" class="bold-td">1.19</td>
+              <td>200</td>
+              <td>0.43</td>
+              <td>1.63</td>
+              <td>1.96</td>
+              <td style="border-right:1px solid var(--border);">2.16</td>
+              <td>200</td>
+              <td>0.79</td>
+              <td>4.41</td>
+              <td>2.61</td>
+              <td style="border-right:1px solid var(--border);">4.41</td>
+              <td>85k</td>
+              <td>0.44</td>
+              <td>1.65</td>
+              <td class="bold-td">0.96</td>
+              <td>1.68</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="table-caption">Quantitative comparison across four <span class="keep-case">ShapeNet</span> categories (Airplane, Chair, Lamp, Sofa).
+        We evaluate 100 models per category. Best values are highlighted in bold.</p>
+    </div>
+
+    <!-- RUNTIME BAR CHART -->
+    <div style="margin-top: 2rem;" class="reveal">
+      <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:2rem;">
+        <div class="ablation-title" style="text-align: center;">Timings Breakdown across Datasets (seconds)</div>
+        <div
+          style="display:flex; justify-content:center; gap:1.5rem; margin-bottom:1rem; font-family:'DM Sans', sans-serif; font-size:1.15rem; color: #fff;">
+          <div style="display:flex; align-items:center; gap:0.4rem;">
+            <div style="width:12px; height:12px; background:#6b7280; border-radius:3px;"></div> Preprocessing
+          </div>
+          <div style="display:flex; align-items:center; gap:0.4rem;">
+            <div style="width:12px; height:12px; background:#5b9cf6; border-radius:3px;"></div> Encoding
+          </div>
+          <div style="display:flex; align-items:center; gap:0.4rem;">
+            <div style="width:12px; height:12px; background:rgb(255, 20, 100); border-radius:3px;"></div>
+            Decoding/Reconstruction
+          </div>
+        </div>
+        <div class="chart-container" style="position: relative; height:450px; width:100%;">
+          <canvas id="timingChart"></canvas>
+        </div>
+        <p
+          style="text-align:center; font-size:1.35rem; color:var(--muted); margin-top:2rem; max-width:850px; margin-left:auto; margin-right:auto;">
+          Mean execution time (in seconds) for CoverageAxis++ (CA++), Raw Medial Axis (RMA), MASH, and our method across
+          four datasets. The total time is decomposed into Preprocessing (gray), Encoding (blue), and
+          Decoding/Reconstruction (neon red).</p>
+      </div>
+    </div>
+
+    <!-- QUALITATIVE RESULTS GALLERY -->
+    <div class="gallery-section reveal" id="gallery">
+      <h2>Qualitative Comparison</h2>
+      <p>Visual comparison of reconstructed surfaces across all methods. Hover to zoom. Each row shows Ground Truth,
+        SHARC (Ours), MASH, CoverageAxis++ (CA++), and Raw MA. Press the buttons to switch between dataset results.</p>
+
+      <div class="gallery-tabs">
+        <button class="gallery-tab" onclick="switchGallery('psb')">PSB Dataset</button>
+        <button class="gallery-tab" onclick="switchGallery('thingi')">Thingi10k Dataset</button>
+        <button class="gallery-tab active" onclick="switchGallery('shapenet')">ShapeNet Dataset</button>
+        <button class="gallery-tab" onclick="switchGallery('stanford')">Stanford Dataset</button>
+      </div>
+
+      <!-- PSB Panel -->
+      <div class="gallery-panel" id="panel-psb">
+        <div class="gallery-row">
+          <div class="gallery-row-label">Ant</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/psb/ant_2_gt.png" alt="Ant GT" loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/ant_2_ours.png" alt="Ant SHARC" loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/ant_2_mash.png" alt="Ant MASH" loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/ant_2_CA.png" alt="Ant CA++" loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/ant_2_raw_ma.png" alt="Ant Raw MA" loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+        <div class="gallery-row">
+          <div class="gallery-row-label">Bust</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/psb/bust_1_gt.png" alt="Bust GT" loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/bust_1_ours.png" alt="Bust SHARC" loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/bust_1_mash.png" alt="Bust MASH" loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/bust_1_CA.png" alt="Bust CA++" loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/bust_1_raw_ma.png" alt="Bust Raw MA"
+                loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+        <div class="gallery-row">
+          <div class="gallery-row-label">Horse</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/psb/horse_1_gt.png" alt="Horse GT" loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/horse_1_ours.png" alt="Horse SHARC"
+                loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/horse_1_mash.png" alt="Horse MASH" loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/horse_1_CA.png" alt="Horse CA++" loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/horse_1_raw_ma.png" alt="Horse Raw MA"
+                loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+        <div class="gallery-row">
+          <div class="gallery-row-label">Octopus</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/psb/octopus_gt.png" alt="Octopus GT" loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/octopus_ours.png" alt="Octopus SHARC"
+                loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/octopus_mash.png" alt="Octopus MASH"
+                loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/octopus_CA.png" alt="Octopus CA++" loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/octopus_raw_ma.png" alt="Octopus Raw MA"
+                loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+        <div class="gallery-row">
+          <div class="gallery-row-label">Teddy</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/psb/teddy_gt.png" alt="Teddy GT" loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/teddy_ours.png" alt="Teddy SHARC" loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/teddy_mash.png" alt="Teddy MASH" loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/teddy_CA.png" alt="Teddy CA++" loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/teddy_raw_ma.png" alt="Teddy Raw MA"
+                loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+        <div class="gallery-row">
+          <div class="gallery-row-label">Vase</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/psb/vase_1_gt.png" alt="Vase GT" loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/vase_1_ours.png" alt="Vase SHARC" loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/vase_1_mash.png" alt="Vase MASH" loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/vase_1_CA.png" alt="Vase CA++" loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/psb/vase_1_raw_ma.png" alt="Vase Raw MA"
+                loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Thingi10k Panel -->
+      <div class="gallery-panel" id="panel-thingi">
+        <div class="gallery-row">
+          <div class="gallery-row-label">Lion</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/thingi/lion_gt.png" alt="Lion GT" loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/thingi/lion_ours.png" alt="Lion SHARC" loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/thingi/lion_mash.png" alt="Lion MASH" loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/thingi/lion_CA.png" alt="Lion CA++" loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/thingi/lion_raw_ma.png" alt="Lion Raw MA"
+                loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+        <div class="gallery-row">
+          <div class="gallery-row-label">Snowflake</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/thingi/snowflake_gt.png" alt="Snowflake GT"
+                loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/thingi/snowflake_ours.png" alt="Snowflake SHARC"
+                loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/thingi/snowflake_mash.png" alt="Snowflake MASH"
+                loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/thingi/snowflake_CA.png" alt="Snowflake CA++"
+                loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/thingi/snowflake_raw_ma.png" alt="Snowflake Raw MA"
+                loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+        <div class="gallery-row">
+          <div class="gallery-row-label">Octo Cat</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/thingi/octo_cat_gt.png" alt="Octo Cat GT"
+                loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/thingi/octo_cat_ours.png" alt="Octo Cat SHARC"
+                loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/thingi/octo_cat_mash.png" alt="Octo Cat MASH"
+                loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/thingi/octo_cat_CA.png" alt="Octo Cat CA++"
+                loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/thingi/octo_cat_raw_ma.png" alt="Octo Cat Raw MA"
+                loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+        <div class="gallery-row">
+          <div class="gallery-row-label">Spiral Lamb</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/thingi/spiral_lamb_gt.png" alt="Spiral Lamb GT"
+                loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/thingi/spiral_lamb_ours.png" alt="Spiral Lamb SHARC"
+                loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/thingi/spiral_lamb_mash.png" alt="Spiral Lamb MASH"
+                loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/thingi/spiral_lamb_CA.png" alt="Spiral Lamb CA++"
+                loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/thingi/spiral_lamb_raw_ma.png"
+                alt="Spiral Lamb Raw MA" loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ShapeNet Panel -->
+      <div class="gallery-panel active" id="panel-shapenet">
+        <div class="gallery-row">
+          <div class="gallery-row-label">Airplane 1</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/airplane_1_gt.png" alt="Airplane 1 GT"
+                loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/airplane_1_ours.png" alt="Airplane 1 SHARC"
+                loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/airplane_1_mash.png" alt="Airplane 1 MASH"
+                loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/airplane_1_ca.png" alt="Airplane 1 CA++"
+                loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/airplane_1_raw_ma.png"
+                alt="Airplane 1 Raw MA" loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+        <div class="gallery-row">
+          <div class="gallery-row-label">Airplane 2</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/airplane_2_gt.png" alt="Airplane 2 GT"
+                loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/airplane_2_ours.png" alt="Airplane 2 SHARC"
+                loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/airplane_2_mash.png" alt="Airplane 2 MASH"
+                loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/airplane_2_ca.png" alt="Airplane 2 CA++"
+                loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/airplane_2_raw_ma.png"
+                alt="Airplane 2 Raw MA" loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+        <div class="gallery-row">
+          <div class="gallery-row-label">Chair 1</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/chair_1_gt.png" alt="Chair 1 GT"
+                loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/chair_1_ours.png" alt="Chair 1 SHARC"
+                loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/chair_1_mash.png" alt="Chair 1 MASH"
+                loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/chair_1_ca.png" alt="Chair 1 CA++"
+                loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/chair_1_raw_ma.png" alt="Chair 1 Raw MA"
+                loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+        <div class="gallery-row">
+          <div class="gallery-row-label">Chair 2</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/chair_2_gt.png" alt="Chair 2 GT"
+                loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/chair_2_ours.png" alt="Chair 2 SHARC"
+                loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/chair_2_mash.png" alt="Chair 2 MASH"
+                loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/chair_2_ca.png" alt="Chair 2 CA++"
+                loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/chair_2_raw_ma.png" alt="Chair 2 Raw MA"
+                loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+        <div class="gallery-row">
+          <div class="gallery-row-label">Chair 3</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/chair_3_gt.png" alt="Chair 3 GT"
+                loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/chair_3_ours.png" alt="Chair 3 SHARC"
+                loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/chair_3_mash.png" alt="Chair 3 MASH"
+                loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/chair_3_ca.png" alt="Chair 3 CA++"
+                loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/chair_3_raw_ma.png" alt="Chair 3 Raw MA"
+                loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+        <div class="gallery-row">
+          <div class="gallery-row-label">Lamb</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/lamb_1_gt.png" alt="Lamb GT" loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/lamb_1_ours.png" alt="Lamb SHARC"
+                loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/lamb_1_mash.png" alt="Lamb MASH"
+                loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/lamb_1_ca.png" alt="Lamb CA++"
+                loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/shapenet/lamb_1_raw_ma.png" alt="Lamb Raw MA"
+                loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stanford Panel -->
+      <div class="gallery-panel" id="panel-stanford">
+        <div class="gallery-row">
+          <div class="gallery-row-label">Armadillo</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/stanford/Armadillo_gt.png" alt="Armadillo GT" loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/Armadillo_ours.001.png" alt="Armadillo SHARC" loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/Armadillo_mash.001.png" alt="Armadillo MASH" loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/Armadillo_CA.png" alt="Armadillo CA++" loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/Armadillo_raw_ma.001.png" alt="Armadillo Raw MA" loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+        <div class="gallery-row">
+          <div class="gallery-row-label">Bunny</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/stanford/Bunny_gt.001.png" alt="Bunny GT" loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/Bunny_ours.png" alt="Bunny SHARC" loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/Bunny_mash.png" alt="Bunny MASH" loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/Bunny_CA.001.png" alt="Bunny CA++" loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/Bunny_raw_ma.png" alt="Bunny Raw MA" loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+        <div class="gallery-row">
+          <div class="gallery-row-label">Dragon</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/stanford/dragon_gt.002.png" alt="Dragon GT" loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/dragon_ours.002.png" alt="Dragon SHARC" loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/dragon_mash.002.png" alt="Dragon MASH" loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/dragon_CA.002.png" alt="Dragon CA++" loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/dragon_raw_ma.002.png" alt="Dragon Raw MA" loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+        <div class="gallery-row">
+          <div class="gallery-row-label">Happy Buddha</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/stanford/happy_gt.003.png" alt="Happy Buddha GT" loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/happy_ours.003.png" alt="Happy Buddha SHARC" loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/happy_mash.003.png" alt="Happy Buddha MASH" loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/happy_CA.003.png" alt="Happy Buddha CA++" loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/happy_raw_ma.003.png" alt="Happy Buddha Raw MA" loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+        <div class="gallery-row">
+          <div class="gallery-row-label">Asian Dragon</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/stanford/xyz_dragon_gt.004.png" alt="Asian Dragon GT" loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/xyz_dragon_ours.004.png" alt="Asian Dragon SHARC" loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/xyz_dragon_mash.004.png" alt="Asian Dragon MASH" loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/xyz_dragon_CA.004.png" alt="Asian Dragon CA++" loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/xyz_dragon_raw_ma.004.png" alt="Asian Dragon Raw MA" loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+        <div class="gallery-row">
+          <div class="gallery-row-label">Thai Statue</div>
+          <div class="gallery-images">
+            <div class="gallery-img-col"><img src="assets/renders/stanford/xyz_statuette_gt.005.png" alt="Thai Statue GT" loading="lazy">
+              <div class="gallery-img-label">Ground Truth</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/xyz_statuette_ours.005.png" alt="Thai Statue SHARC" loading="lazy">
+              <div class="gallery-img-label ours-label">SHARC (Ours)</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/xyz_statuette_mash.005.png" alt="Thai Statue MASH" loading="lazy">
+              <div class="gallery-img-label">MASH</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/xyz_statuette_CA.005.png" alt="Thai Statue CA++" loading="lazy">
+              <div class="gallery-img-label">CA++</div>
+            </div>
+            <div class="gallery-img-col"><img src="assets/renders/stanford/xyz_statuette_raw_ma.005.png" alt="Thai Statue Raw MA" loading="lazy">
+              <div class="gallery-img-label">Raw MA</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABLATION -->
+  <div class="section-divider"></div>
+  <section id="ablation">
+    <div class="section-label">Ablation Studies</div>
+    <h2>Design Choices Validated</h2>
+
+    <div class="ablation-grid">
+      <!-- Proximity threshold -->
+      <div class="ablation-card reveal">
+        <div class="ablation-title">Proximity Threshold \(\tau_{\text{prox}}\)</div>
+        <p style="font-size:1.35rem; color: #fff; margin-bottom:1.2rem;">Without a threshold (\(\tau_{\text{prox}} =\) None), the
+          selection is driven purely by visibility, resulting in a sparse representation (\(|\mathcal{C}| = 31\) for
+          Armadillo) that fails to capture fine details like the scales on the leg or facial creases. Our default
+          setting (\(\tau_{\text{prox}} = 0.2\)) enforces locality, recovering these high-frequency features with a
+          compact set of anchors (\(|\mathcal{C}| = 60\)). A strict threshold (\(\tau_{\text{prox}} = 0.05\)) results in
+          an excessive number of reference points (\(|\mathcal{C}| = 830\)) without significant visual improvement.</p>
+        <div style="text-align: center; margin-top: 1.5rem;">
+          <img src="assets/Ablations_t_prox.png" alt="Proximity Threshold Ablation"
+            style="max-width: 100%; height: auto; border-radius: 8px;">
+        </div>
+      </div>
+
+      <!-- SH bandwidth -->
+      <div class="ablation-card reveal">
+        <div class="ablation-title">SH Bandwidth \(L\)</div>
+        <p style="font-size:1.35rem; color: #fff; margin-bottom:1.2rem;">Lower bandwidths (\(L = 16, 32\)) result in overly smoothed
+          geometry, failing to capture high-frequency features. Our default setting (\(L = 64\)) successfully recovers
+          fine details such as the dragon’s scales and the sharp corners of the skyscrapers. Doubling the bandwidth to
+          \(L = 128\) offers minor visual improvement while increasing the storage footprint.</p>
+        <div style="text-align: center; margin-top: 1.5rem;">
+          <img src="./assets/Ablation_L.png" alt="SH Bandwidth Ablation"
+            style="max-width: 100%; height: auto; border-radius: 8px;">
+        </div>
+      </div>
+
+      <!-- Lanczos -->
+      <div class="ablation-card reveal">
+        <div class="ablation-title">Lanczos Smoothing</div>
+        <p style="font-size:1.35rem; color: #fff; margin-bottom:1.2rem;">Without applying a smoothing filter, the result exhibits
+          significant ringing artifacts, visible as high-frequency ripples on the neck and body scales. Applying Lanczos
+          smoothing effectively suppresses this noise, restoring a clean surface while preserving the underlying
+          geometric structure.</p>
+        <div style="text-align: center; margin-top: 1.5rem;">
+          <img src="./assets/Ablations_smoothing.png" alt="Lanczos Smoothing Ablation"
+            style="max-width: 100%; height: auto; border-radius: 8px;">
+        </div>
+      </div>
+
+      <!-- Scalability -->
+      <div class="ablation-card reveal">
+        <div class="ablation-title">Scalability with \(|\mathcal{C}|\)</div>
+        <p style="font-size:1.35rem; color: #fff; margin-bottom:1.2rem;">SHARC achieves lowest Chamfer Distance even at
+          \(|\mathcal{C}|<50\), while maintaining near-constant runtime across all budgets.</p>
+
+            <!-- Interactive Dataset Selector -->
+            <div style="display:flex; justify-content:center; gap:0.5rem; margin-bottom:1.5rem; flex-wrap:wrap;">
+              <button class="tab-btn" onclick="updateScaleCharts('psb', this)">PCB Dataset</button>
+              <button class="tab-btn active" onclick="updateScaleCharts('thingi', this)">Thingi10k Dataset</button>
+              <button class="tab-btn" onclick="updateScaleCharts('stanford', this)">Stanford Dataset</button>
+            </div>
+
+            <!-- Chart Columns -->
+            <div style="display:flex; gap:1.5rem; flex-wrap:wrap;">
+              <div style="flex:1; min-width:280px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:1.5rem;">
+                <div style="font-family:'DM Sans', sans-serif; font-size:1.2rem; color:var(--text); text-align:center; margin-bottom:1rem; font-weight:500;">
+                  Computation Time (s)</div>
+                <div style="position:relative; height:240px; width:100%;">
+                  <canvas id="timeChart"></canvas>
+                </div>
+              </div>
+              <div
+                style="flex:1; min-width:280px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:1.5rem;">
+                <div
+                  style="font-family:'DM Sans', sans-serif; font-size:1.2rem; color:white; text-align:center; margin-bottom:1rem; font-weight:500;">
+                  Chamfer Distance (10⁻³)</div>
+                <div style="position:relative; height:240px; width:100%;">
+                  <canvas id="accChart"></canvas>
+                </div>
+              </div>
+            </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BIBTEX -->
+  <div class="section-divider"></div>
+  <section id="bibtex">
+    <div class="section-label">Citation</div>
+    <h2>BibTeX</h2>
+
+    <div class="bibtex-block reveal">
+      <div class="bibtex-header">
+        <div class="bibtex-dots">
+          <span style="background:#ff5f57"></span>
+          <span style="background:#febc2e"></span>
+          <span style="background:#28c840"></span>
+        </div>
+        <button class="copy-btn" onclick="copyBibtex(this)">copy</button>
+      </div>
+      <pre id="bibtex-content">@article{sapoutzoglou2026sharc,
+      title={SHARC: Reference point driven Spherical Harmonic Representation for Complex Shapes},
+      author={Panagiotis Sapoutzoglou and George Terzakis and Maria Pateraki},
+      year={2026},
+      journal={arXiv:2604.01894}
+    }</pre>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <p>SHARC &middot; ICPR 2026 &middot; National Technical University of Athens</p>
+    <p style="margin-top: 0.5rem; font-size: 0.9em; opacity: 0.8;">
+      &copy; 2026 &middot; <a rel="license" href="http://creativecommons.org/licenses/by/4.0/" target="_blank" style="color: inherit; text-decoration: underline;">CC BY 4.0</a>
+    </p>
+  </footer>
+
+  <script>
+    // Reveal on scroll
+    const reveals = document.querySelectorAll('.reveal');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((e, i) => {
+        if (e.isIntersecting) {
+          setTimeout(() => e.target.classList.add('visible'), i * 60);
+        }
+      });
+    }, { threshold: 0.1 });
+    reveals.forEach(el => observer.observe(el));
+
+    // Animate bars when visible
+    const barObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.querySelectorAll('.chart-bar, .param-bar').forEach(bar => {
+            const w = bar.dataset.width || bar.style.width;
+            bar.style.width = (bar.dataset.width ? bar.dataset.width + '%' : w);
+          });
+        }
+      });
+    }, { threshold: 0.2 });
+    document.querySelectorAll('.ablation-card, .reveal').forEach(el => barObserver.observe(el));
+
+    // Copy bibtex
+    function copyBibtex(btn) {
+      const text = document.getElementById('bibtex-content').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'copied!';
+        btn.style.color = 'var(--accent3)';
+        setTimeout(() => { btn.textContent = 'copy'; btn.style.color = ''; }, 2000);
+      });
+    }
+
+    // Gallery tab switching
+    function switchGallery(panel) {
+      document.querySelectorAll('.gallery-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.gallery-tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('panel-' + panel).classList.add('active');
+      event.target.classList.add('active');
+    }
+
+    // KaTeX auto-render
+    document.addEventListener("DOMContentLoaded", function () {
+      if (typeof renderMathInElement !== 'undefined') {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: "\\(", right: "\\)", display: false },
+            { left: "\\[", right: "\\]", display: true }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+    // Interactive Grouped Timings Chart Initialization
+    document.addEventListener("DOMContentLoaded", function () {
+      const ctx = document.getElementById('timingChart').getContext('2d');
+
+      const colorPre = '#6b7280';       // Grey
+      const colorEnc = '#5b9cf6';       // Blue
+      const colorDec = 'rgb(255, 20, 100)'; // Neon Red from background
+
+      function getDatasetObj(methodLabel, stackId, dataArray, type) {
+        let color = type === 'pre' ? colorPre : (type === 'enc' ? colorEnc : colorDec);
+        let stageStr = type === 'pre' ? 'Preprocessing' : (type === 'enc' ? 'Encoding' : 'Decoding/Reconstruction');
+        return {
+          label: `${methodLabel} - ${stageStr}`,
+          stack: stackId,
+          data: dataArray,
+          backgroundColor: color,
+          borderColor: color,
+          borderWidth: 0,
+          borderRadius: type === 'dec' ? { topLeft: 4, topRight: 4 } : 0,
+          hoverBackgroundColor: color
+        }
+      }
+
+      const chartLabels = ['PSB', 'ShapeNet', 'Thingi10k', 'Stanford'];
+
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: chartLabels,
+          datasets: [
+            getDatasetObj('RMA', 'rma', [0.1, 1.0, 2.5, 36.3], 'pre'),
+            getDatasetObj('RMA', 'rma', [3.4, 10.8, 9.3, 12.7], 'enc'),
+            getDatasetObj('RMA', 'rma', [45.2, 111.7, 81.5, 117.1], 'dec'),
+
+            getDatasetObj('CA++', 'ca', [0.2, 1.1, 3.0, 41.7], 'pre'),
+            getDatasetObj('CA++', 'ca', [17.9, 36.6, 37.7, 40.7], 'enc'),
+            getDatasetObj('CA++', 'ca', [1.5, 1.5, 1.5, 1.5], 'dec'),
+
+            getDatasetObj('MASH', 'mash', [0, 0, 0, 0], 'pre'),
+            getDatasetObj('MASH', 'mash', [114.7, 113.4, 309.2, 311.9], 'enc'),
+            getDatasetObj('MASH', 'mash', [47.3, 39.6, 35.4, 64.3], 'dec'),
+
+            getDatasetObj('Ours', 'ours', [0, 0, 0, 0], 'pre'),
+            getDatasetObj('Ours', 'ours', [7.7, 8.7, 10.9, 15.7], 'enc'),
+            getDatasetObj('Ours', 'ours', [5.1, 6.2, 9.9, 6.8], 'dec')
+          ]
+        },
+        plugins: [{
+          id: 'methodLabels',
+          afterDraw: (chart) => {
+            const { ctx, chartArea: { bottom } } = chart;
+            ctx.save();
+
+            const methods = ['RMA', 'CA++', 'MASH', 'Ours'];
+            for (let i = 0; i < 4; i++) {
+              for (let m = 0; m < 4; m++) {
+                let meta = chart.getDatasetMeta(m * 3);
+                if (meta.data[i]) {
+                  // 1. Draw method label below
+                  ctx.font = "12px 'DM Sans', sans-serif";
+                  ctx.fillStyle = '#e8eaf0';
+                  ctx.textAlign = 'center';
+                  ctx.textBaseline = 'top';
+                  ctx.fillText(methods[m], meta.data[i].x, bottom + 8);
+
+                  // 2. Compute total and draw above
+                  let d0 = chart.data.datasets[m * 3].data[i] || 0;
+                  let d1 = chart.data.datasets[m * 3 + 1].data[i] || 0;
+                  let d2 = chart.data.datasets[m * 3 + 2].data[i] || 0;
+                  let total = (d0 + d1 + d2).toFixed(1);
+
+                  let topMeta = chart.getDatasetMeta(m * 3 + 2);
+                  if (topMeta.data[i]) {
+                    ctx.font = "bold 10px 'DM Sans', sans-serif";
+                    ctx.fillStyle = '#a1a1aa';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillText(total, topMeta.data[i].x, topMeta.data[i].y - 4);
+                  }
+                }
+              }
+            }
+            ctx.restore();
+          }
+        }],
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: {
+            padding: { top: 20, bottom: 25 }
+          },
+          interaction: {
+            mode: 'index',
+            intersect: false,
+          },
+          events: [],
+          plugins: {
+            legend: { display: false },
+            tooltip: { enabled: false }
+          },
+          scales: {
+            xTop: {
+              type: 'category',
+              position: 'top',
+              stacked: true,
+              grid: { display: false },
+              border: { display: false },
+              ticks: { color: '#e8eaf0', font: { family: "'DM Sans', sans-serif", size: 18, weight: 'bold' } }
+            },
+            x: {
+              stacked: true,
+              position: 'bottom',
+              grid: { display: false },
+              border: { display: false },
+              ticks: { display: false }
+            },
+            y: {
+              stacked: true,
+              grid: { color: 'rgba(255,255,255,0.05)' },
+              border: { color: 'rgba(255,255,255,0.1)' },
+              ticks: { color: '#e8eaf0', font: { family: "'DM Sans', sans-serif", size: 16 } },
+              title: { display: true, text: 'Time (s)', color: '#e8eaf0', font: { family: "'DM Sans', sans-serif", size: 16 } }
+            }
+          },
+          animation: { duration: 1500, easing: 'easeOutQuart' }
+        }
+      });
+    });
+
+    // Scalability Line Charts Initialization
+    document.addEventListener("DOMContentLoaded", function () {
+      const timeCtx = document.getElementById('timeChart').getContext('2d');
+      const accCtx = document.getElementById('accChart').getContext('2d');
+
+      function getLineConfig(label, color, style, data) {
+        return {
+          label: label,
+          data: data,
+          borderColor: color,
+          backgroundColor: color,
+          pointStyle: style,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          borderWidth: 2,
+          tension: 0
+        };
+      }
+
+      const scaleData = {
+        labels: [20, 40, 60, 80, 100, 200],
+        psb: {
+          time: [
+            getLineConfig('Coverage Axis', '#34d399', 'rect', [10, 11, 12, 13, 13.5, 17]),
+            getLineConfig('MASH', 'rgb(255, 20, 100)', 'triangle', [28, 68, 70, 58, 68, 118]),
+            getLineConfig('SHARC', '#5b9cf6', 'circle', [8, 9, 10, 11, 12, 17])
+          ],
+          acc: [
+            getLineConfig('Coverage Axis', '#34d399', 'rect', [2.55, 1.45, 1.05, 0.9, 0.85, 0.65]),
+            getLineConfig('MASH', 'rgb(255, 20, 100)', 'triangle', [1.7, 0.55, 0.45, 0.4, 0.35, 0.3]),
+            getLineConfig('SHARC', '#5b9cf6', 'circle', [0.35, 0.28, 0.26, 0.26, 0.26, 0.26])
+          ]
+        },
+        thingi: {
+          time: [
+            getLineConfig('Coverage Axis', '#34d399', 'rect', [28, 29, 30, 33, 32, 41]),
+            getLineConfig('MASH', 'rgb(255, 20, 100)', 'triangle', [22, 51, 52, 62, 78, 145]),
+            getLineConfig('SHARC', '#5b9cf6', 'circle', [8, 9, 10, 11.5, 12.5, 18])
+          ],
+          acc: [
+            getLineConfig('Coverage Axis', '#34d399', 'rect', [4.1, 2.9, 2.45, 2.1, 2.2, 1.6]),
+            getLineConfig('MASH', 'rgb(255, 20, 100)', 'triangle', [2.5, 1.8, 1.35, 1.1, 0.9, 0.75]),
+            getLineConfig('SHARC', '#5b9cf6', 'circle', [1.05, 0.65, 0.55, 0.48, 0.46, 0.4])
+          ]
+        },
+        stanford: {
+          time: [
+            getLineConfig('Coverage Axis', '#34d399', 'rect', [72, 73, 75, 76, 58, 81]),
+            getLineConfig('MASH', 'rgb(255, 20, 100)', 'triangle', [28, 48, 49, 56, 78, 141]),
+            getLineConfig('SHARC', '#5b9cf6', 'circle', [14, 14.5, 16, 17.5, 19, 24])
+          ],
+          acc: [
+            getLineConfig('Coverage Axis', '#34d399', 'rect', [3.0, 2.25, 1.7, 1.5, 1.3, 0.95]),
+            getLineConfig('MASH', 'rgb(255, 20, 100)', 'triangle', [1.25, 0.9, 0.7, 0.6, 0.55, 0.45]),
+            getLineConfig('SHARC', '#5b9cf6', 'circle', [0.45, 0.35, 0.34, 0.32, 0.31, 0.30])
+          ]
+        }
+      };
+
+      const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        events: [],
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: {
+              color: '#e8eaf0',
+              usePointStyle: true,
+              boxWidth: 4,
+              boxHeight: 4,
+              pointStyleWidth: 8,
+              font: { family: "'DM Sans', sans-serif", size: 16 }
+            }
+          },
+          tooltip: { enabled: false }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(255,255,255,0.05)' },
+            ticks: { color: '#e8eaf0', font: { family: "'DM Sans', sans-serif", size: 14 } },
+            title: { display: true, text: 'Number of Anchors (C)', color: '#e8eaf0', font: { family: "'DM Sans', sans-serif", weight: 'bold', size: 16 } }
+          },
+          y: {
+            grid: { color: 'rgba(255,255,255,0.05)' },
+            ticks: { color: '#e8eaf0', font: { family: "'DM Sans', sans-serif", size: 14 } }
+          }
+        }
+      };
+
+      window.timePlot = new Chart(timeCtx, { type: 'line', data: { labels: scaleData.labels, datasets: scaleData.thingi.time }, options: commonOptions });
+      window.accPlot = new Chart(accCtx, { type: 'line', data: { labels: scaleData.labels, datasets: scaleData.thingi.acc }, options: commonOptions });
+
+      window.updateScaleCharts = function (ds, btn) {
+        // Reset all tabs inside the scalability container
+        btn.parentElement.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        window.timePlot.data.datasets = scaleData[ds].time;
+        window.accPlot.data.datasets = scaleData[ds].acc;
+        window.timePlot.update();
+        window.accPlot.update();
+      };
+    });
+
+    // Synchronized Interactive Portal Magnifier Lenses
+    document.addEventListener("DOMContentLoaded", () => {
+      const zoom = 2.4;
+      document.querySelectorAll('.gallery-img-col').forEach(col => {
+        col.style.position = 'relative';
+        const img = col.querySelector('img');
+        if (!img) return;
+
+        const lens = document.createElement('div');
+        lens.style.position = 'absolute';
+        lens.style.width = '140px';
+        lens.style.height = '140px';
+        lens.style.borderRadius = '50%';
+        lens.style.border = '2px solid rgba(255,255,255,0.7)';
+        lens.style.boxShadow = '0 10px 30px rgba(0,0,0,0.8), inset 0 0 10px rgba(0,0,0,0.2)';
+        lens.style.pointerEvents = 'none';
+        lens.style.zIndex = '100';
+        lens.style.overflow = 'hidden';
+        lens.style.display = 'none';
+        lens.style.backgroundColor = 'var(--surface)';
+
+        const inner = document.createElement('div');
+        inner.style.position = 'absolute';
+        inner.style.width = '100%';
+        inner.style.height = '100%';
+
+        const clonedImg = document.createElement('img');
+        clonedImg.src = img.src;
+        clonedImg.style.pointerEvents = 'none';
+        clonedImg.style.transition = 'none';
+
+        inner.appendChild(clonedImg);
+        lens.appendChild(inner);
+        col.appendChild(lens);
+
+        col._magObj = { lens, inner, clonedImg }; // bind refs for orchestration
+      });
+
+      document.querySelectorAll('.gallery-images').forEach(row => {
+        const cols = Array.from(row.querySelectorAll('.gallery-img-col')).filter(c => c._magObj);
+
+        cols.forEach(col => {
+          col.addEventListener('mouseenter', () => {
+            cols.forEach(c => {
+              const { lens, clonedImg } = c._magObj;
+              lens.style.display = 'block';
+              clonedImg.style.width = c.offsetWidth + 'px';
+              clonedImg.style.maxWidth = c.offsetWidth + 'px';
+              clonedImg.style.height = c.offsetHeight + 'px';
+              clonedImg.style.margin = '0';
+            });
+          });
+
+          col.addEventListener('mousemove', (e) => {
+            const rect = col.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const r = 70; // half-width
+
+            cols.forEach(c => {
+              const { lens, inner } = c._magObj;
+              lens.style.left = (x - r) + 'px';
+              lens.style.top = (y - r) + 'px';
+
+              inner.style.left = -(x - r) + 'px';
+              inner.style.top = -(y - r) + 'px';
+              inner.style.width = c.offsetWidth + 'px';
+              inner.style.height = c.offsetHeight + 'px';
+
+              inner.style.transformOrigin = `${x}px ${y}px`;
+              inner.style.transform = `scale(${zoom})`;
+            });
+          });
+
+          col.addEventListener('mouseleave', () => {
+            cols.forEach(c => {
+              c._magObj.lens.style.display = 'none';
+            });
+          });
+        });
+      });
+    });
+  </script>
+
+</body>
+
+</html>
